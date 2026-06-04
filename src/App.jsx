@@ -159,8 +159,7 @@ export default function App() {
 
   return (
     <Root>
-      <TopBar perfil={perfil} tab={tab} setTab={setTab} onOpenProfile={() => setShowPerfil(true)} onLogout={logout} esDueño={esDueño} />
-      <main className="il-main">
+      <Shell perfil={perfil} tab={tab} setTab={setTab} onOpenProfile={() => setShowPerfil(true)} onLogout={logout} esDueño={esDueño}>
         {cargandoDatos && socios.length === 0 ? <div className="il-center" style={{ minHeight: "40vh" }}><div className="il-spinner" /></div> : (
           <>
             {tab === "dashboard" && <Dashboard stats={stats} enriched={enriched} onOpen={setSelected} perfil={perfil} />}
@@ -170,7 +169,7 @@ export default function App() {
             {tab === "equipo" && esDueño && <Equipo equipo={equipo} perfil={perfil} onRol={actualizarRolEquipo} onCrear={crearUsuario} />}
           </>
         )}
-      </main>
+      </Shell>
       {selectedSocio && <FichaSocio socio={selectedSocio} onClose={() => setSelected(null)} onPay={registrarPago} onAnular={anularPago} onEditar={() => setEditSocio(selectedSocio)} onEliminar={eliminarSocio} />}
       {showAlta && <SocioForm modo="alta" planes={planes} onClose={() => setShowAlta(false)} onSave={altaSocio} />}
       {editSocio && <SocioForm modo="editar" planes={planes} socio={editSocio} onClose={() => setEditSocio(null)} onSave={(d) => guardarEdicionSocio(editSocio.id, d)} />}
@@ -220,39 +219,71 @@ function Login({ aviso }) {
   );
 }
 
-// ---------- TOPBAR ----------
-function TopBar({ perfil, tab, setTab, onOpenProfile, onLogout, esDueño }) {
+// ---------- SHELL (sidebar + drawer móvil) ----------
+const NAV = [
+  { k: "dashboard", l: "Inicio", ico: "▦" },
+  { k: "socios", l: "Socios", ico: "👥" },
+  { k: "cobros", l: "Cobros", ico: "💲" },
+  { k: "planes", l: "Planes", ico: "🏷", soloDueño: true },
+  { k: "equipo", l: "Equipo", ico: "🛡", soloDueño: true },
+];
+
+function Shell({ perfil, tab, setTab, onOpenProfile, onLogout, esDueño, children }) {
   const [menu, setMenu] = useState(false);
+  const [drawer, setDrawer] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
     function fuera(e) { if (ref.current && !ref.current.contains(e.target)) setMenu(false); }
     document.addEventListener("mousedown", fuera);
     return () => document.removeEventListener("mousedown", fuera);
   }, []);
-  const tabs = [{ k: "dashboard", l: "Inicio" }, { k: "socios", l: "Socios" }, { k: "cobros", l: "Cobros" }];
-  if (esDueño) tabs.push({ k: "planes", l: "Planes" }, { k: "equipo", l: "Equipo" });
-  return (
-    <header className="il-topbar">
-      <div className="il-logo"><img src={LOGO} alt="" /><div className="il-logo-txt">NANO<b>GYM</b></div></div>
-      <nav className="il-nav">{tabs.map((t) => <button key={t.k} className={tab === t.k ? "active" : ""} onClick={() => setTab(t.k)}>{t.l}</button>)}</nav>
-      <div className="il-user-chip" ref={ref}>
-        <div className="il-chip-btn" onClick={() => setMenu((m) => !m)}>
-          <div style={{ textAlign: "right" }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>{perfil.nombre}</div><div className="il-role-tag">{perfil.rol}</div></div>
+  const items = NAV.filter((t) => !t.soloDueño || esDueño);
+  const ir = (k) => { setTab(k); setDrawer(false); };
+
+  const SidebarInner = (
+    <>
+      <div className="il-sb-logo"><img src={LOGO} alt="" /><div className="txt">NANO<b>GYM</b></div></div>
+      <nav className="il-sb-nav">
+        {items.map((t) => (
+          <button key={t.k} className={tab === t.k ? "active" : ""} onClick={() => ir(t.k)}>
+            <span className="il-sb-ico">{t.ico}</span>{t.l}
+          </button>
+        ))}
+      </nav>
+      <div className="il-sb-foot" ref={ref} style={{ position: "relative" }}>
+        <div className="il-sb-user" onClick={() => setMenu((m) => !m)}>
           <div className="il-avatar">{perfil.foto ? <img src={perfil.foto} alt="" /> : perfil.nombre[0]}</div>
+          <div style={{ flex: 1, minWidth: 0 }}><div className="nm">{perfil.nombre}</div><div className="il-role-tag">{perfil.rol}</div></div>
+          <span style={{ color: "var(--txt-dim)" }}>⋯</span>
         </div>
         {menu && (
           <div className="il-menu">
-            <div className="il-menu-head">
-              <div className="il-avatar">{perfil.foto ? <img src={perfil.foto} alt="" /> : perfil.nombre[0]}</div>
-              <div><div className="nm">{perfil.nombre}</div><div className="il-role-tag">{perfil.rol}</div></div>
-            </div>
-            <button className="il-menu-item" onClick={() => { setMenu(false); onOpenProfile(); }}><span className="il-menu-ico">👤</span> Mi perfil</button>
+            <button className="il-menu-item" onClick={() => { setMenu(false); setDrawer(false); onOpenProfile(); }}><span className="il-menu-ico">👤</span> Mi perfil</button>
             <div className="il-menu-sep" />
-            <button className="il-menu-item danger" onClick={() => { setMenu(false); onLogout(); }}><span className="il-menu-ico">⏻</span> Cerrar sesión</button>
+            <button className="il-menu-item danger" onClick={onLogout}><span className="il-menu-ico">⏻</span> Cerrar sesión</button>
           </div>
         )}
       </div>
-    </header>
+    </>
+  );
+
+  return (
+    <div className="il-app">
+      <aside className="il-sidebar">{SidebarInner}</aside>
+      <div className="il-content">
+        <div className="il-mobile-bar">
+          <div className="il-mobile-logo"><img src={LOGO} alt="" /><div className="txt">NANO<b>GYM</b></div></div>
+          <button className="il-burger" onClick={() => setDrawer(true)}>☰</button>
+        </div>
+        <main className="il-main">{children}</main>
+      </div>
+      {drawer && (
+        <div className="il-drawer">
+          <div className="il-drawer-bg" onClick={() => setDrawer(false)} />
+          <div className="il-drawer-panel">{SidebarInner}</div>
+        </div>
+      )}
+    </div>
   );
 }
 
