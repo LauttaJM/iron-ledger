@@ -136,6 +136,11 @@ export default function App() {
     await supabase.from("perfiles").update({ rol }).eq("id", id);
     aviso("Rol actualizado ✓"); await cargarDatos();
   }
+  async function crearUsuario(data) {
+    const { data: fn, error } = await supabase.functions.invoke("crear-usuario", { body: data });
+    if (error || fn?.error) { aviso(fn?.error || "Error al crear el perfil", true); return false; }
+    aviso("Perfil creado ✓"); await cargarDatos(); return true;
+  }
   async function actualizarMiPerfil(patch) {
     await supabase.from("perfiles").update(patch).eq("id", perfil.id);
     if (patch.pass) await supabase.auth.updateUser({ password: patch.pass });
@@ -161,7 +166,7 @@ export default function App() {
             {tab === "socios" && <Socios filtered={filtered} query={query} setQuery={setQuery} filtro={filtro} setFiltro={setFiltro} onOpen={setSelected} onAlta={() => setShowAlta(true)} />}
             {tab === "cobros" && <Cobros socios={socios} planById={planById} />}
             {tab === "planes" && esDueño && <Planes planes={planes} onSave={guardarPlan} />}
-            {tab === "equipo" && esDueño && <Equipo equipo={equipo} perfil={perfil} onRol={actualizarRolEquipo} />}
+            {tab === "equipo" && esDueño && <Equipo equipo={equipo} perfil={perfil} onRol={actualizarRolEquipo} onCrear={crearUsuario} />}
           </>
         )}
       </main>
@@ -443,12 +448,15 @@ function Planes({ planes, onSave }) {
 }
 
 // ---------- EQUIPO ----------
-function Equipo({ equipo, perfil, onRol }) {
+function Equipo({ equipo, perfil, onRol, onCrear }) {
+  const [showNuevo, setShowNuevo] = useState(false);
   const dueños = equipo.filter((u) => u.rol === "dueño").length;
   return (
     <>
-      <h1 className="il-page-title">Equipo</h1>
-      <p className="il-page-sub">Perfiles que pueden ingresar al sistema · solo Dueño</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+        <div><h1 className="il-page-title">Equipo</h1><p className="il-page-sub">Perfiles que pueden ingresar al sistema · solo Dueño</p></div>
+        <button className="il-btn sm" onClick={() => setShowNuevo(true)}>+ Nuevo perfil</button>
+      </div>
       {equipo.map((u) => {
         const esYo = u.id === perfil.id;
         const ultimoDueño = u.rol === "dueño" && dueños === 1;
@@ -463,8 +471,52 @@ function Equipo({ equipo, perfil, onRol }) {
           </div>
         );
       })}
-      <div className="il-banner" style={{ marginTop: 18 }}>Para <b>agregar un nuevo empleado o dueño</b>: en el panel de Supabase → Authentication → "Add user" creás su mail y contraseña. Aparece acá automáticamente y le asignás el rol. (En un próximo paso lo dejamos hacer desde esta misma pantalla.)</div>
+      <div className="il-banner" style={{ marginTop: 18 }}>Podés tener <b>más de un dueño</b>. El <b>Dueño</b> gestiona planes, equipo y todo lo demás. El <b>Empleado</b> gestiona socios, pagos y cobros.</div>
+      {showNuevo && <NuevoUsuarioModal onClose={() => setShowNuevo(false)} onCrear={onCrear} />}
     </>
+  );
+}
+
+function NuevoUsuarioModal({ onClose, onCrear }) {
+  const [f, setF] = useState({ nombre: "", mail: "", password: "", rol: "empleado", foto: null });
+  const [touched, setTouched] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const fileRef = useRef(null);
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const errors = {
+    nombre: !f.nombre.trim() ? "Ingresá el nombre." : null,
+    mail: !f.mail.trim() ? "Ingresá el mail." : !emailOk(f.mail) ? "El mail no tiene un formato válido." : null,
+    password: !f.password ? "Ingresá una contraseña." : f.password.length < 6 ? "Mínimo 6 caracteres." : null,
+  };
+  const hayErrores = Object.values(errors).some(Boolean);
+  const showErr = (k) => touched && errors[k];
+  function onFile(e) { const file = e.target.files?.[0]; if (!file) return; const r = new FileReader(); r.onload = () => setF((p) => ({ ...p, foto: r.result })); r.readAsDataURL(file); }
+  async function intentar() {
+    setTouched(true); if (hayErrores) return;
+    setGuardando(true);
+    const ok = await onCrear({ nombre: f.nombre.trim(), mail: f.mail.trim(), password: f.password, rol: f.rol, foto: f.foto });
+    setGuardando(false);
+    if (ok) onClose();
+  }
+  return (
+    <div className="il-overlay" onClick={onClose}>
+      <div className="il-modal" onClick={(ev) => ev.stopPropagation()}>
+        <div className="il-modal-head"><div className="il-modal-title">Nuevo perfil</div><button className="il-close" onClick={onClose}>×</button></div>
+        <div className="il-photo-pick">
+          <div className="il-team-av" onClick={() => fileRef.current?.click()} title="Subir foto">{f.foto ? <img src={f.foto} alt="" /> : "+"}</div>
+          <div>
+            <button className="il-btn ghost sm" onClick={() => fileRef.current?.click()}>Subir foto</button>
+            {f.foto && <button className="il-btn ghost sm" style={{ marginLeft: 8 }} onClick={() => setF({ ...f, foto: null })}>Quitar</button>}
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFile} />
+          </div>
+        </div>
+        <div className="il-field"><label>Nombre</label><input className={"il-input" + (showErr("nombre") ? " err" : "")} value={f.nombre} onChange={set("nombre")} />{showErr("nombre") && <div className="il-err-msg">{errors.nombre}</div>}</div>
+        <div className="il-field"><label>Mail</label><input className={"il-input" + (showErr("mail") ? " err" : "")} value={f.mail} onChange={set("mail")} placeholder="persona@gym.com" />{showErr("mail") && <div className="il-err-msg">{errors.mail}</div>}</div>
+        <div className="il-field"><label>Contraseña</label><input className={"il-input" + (showErr("password") ? " err" : "")} type="text" value={f.password} onChange={set("password")} placeholder="Con la que va a ingresar" />{showErr("password") && <div className="il-err-msg">{errors.password}</div>}</div>
+        <div className="il-field"><label>Rol</label><div className="il-rol-pills"><button className={"il-rol-pill" + (f.rol === "empleado" ? " on" : "")} onClick={() => setF({ ...f, rol: "empleado" })}>Empleado</button><button className={"il-rol-pill" + (f.rol === "dueño" ? " on" : "")} onClick={() => setF({ ...f, rol: "dueño" })}>Dueño</button></div></div>
+        <button className="il-btn" style={{ marginTop: 8 }} onClick={intentar} disabled={guardando}>{guardando ? "Creando…" : "Crear perfil"}</button>
+      </div>
+    </div>
   );
 }
 
