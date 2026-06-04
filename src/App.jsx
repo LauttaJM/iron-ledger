@@ -180,7 +180,38 @@ export default function App() {
 }
 
 function Root({ children }) {
-  return <div className="il-root"><style>{CSS}</style><div className="il-bg-grad" /><div className="il-shell">{children}</div></div>;
+  return (
+    <div className="il-root">
+      <style>{CSS}</style>
+      <div className="il-bg-grad" />
+      <div className="il-bg-crest"><Crest /></div>
+      <div className="il-shell">{children}</div>
+    </div>
+  );
+}
+
+// Emblema original estilo crest deportivo (escudo + monograma N + ráfagas)
+function Emblem({ size = 46 }) {
+  return (
+    <svg className="il-logo-emblem" style={{ width: size, height: size }} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <path d="M50 4 L90 18 V52 C90 76 72 90 50 96 C28 90 10 76 10 52 V18 Z" fill="#16284a" />
+      <path d="M50 12 L82 23 V52 C82 71 68 83 50 88 C32 83 18 71 18 52 V23 Z" fill="none" stroke="#f4efe5" strokeWidth="2.5" />
+      <circle cx="50" cy="48" r="22" fill="#8a2433" />
+      <circle cx="50" cy="48" r="22" fill="none" stroke="#f4efe5" strokeWidth="2" />
+      <text x="50" y="59" fontFamily="Oswald, sans-serif" fontSize="30" fontWeight="700" fill="#f4efe5" textAnchor="middle">N</text>
+    </svg>
+  );
+}
+
+// Versión grande y discreta para el fondo
+function Crest() {
+  return (
+    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <path d="M50 4 L90 18 V52 C90 76 72 90 50 96 C28 90 10 76 10 52 V18 Z" fill="#16284a" />
+      <circle cx="50" cy="48" r="22" fill="#8a2433" />
+      <text x="50" y="59" fontFamily="Oswald, sans-serif" fontSize="30" fontWeight="700" fill="#f4efe5" textAnchor="middle">N</text>
+    </svg>
+  );
 }
 
 // ---------- LOGIN ----------
@@ -198,7 +229,7 @@ function Login({ aviso }) {
   return (
     <div className="il-center">
       <div className="il-login-card">
-        <div className="il-logo"><div className="il-logo-mark">IL</div><div className="il-logo-txt">Iron Ledger<small>Gestión de gimnasio</small></div></div>
+        <div className="il-logo"><Emblem /><div className="il-logo-txt">NanoGYM<small>Gestión de gimnasio</small></div></div>
         <div className="il-field"><label>Mail</label><input className="il-input" value={mail} onChange={(e) => setMail(e.target.value)} placeholder="tu@mail.com" onKeyDown={(e) => e.key === "Enter" && entrar()} /></div>
         <div className="il-field"><label>Contraseña</label><input className="il-input" type="password" value={pass} onChange={(e) => setPass(e.target.value)} onKeyDown={(e) => e.key === "Enter" && entrar()} /></div>
         {error && <div className="il-err-msg" style={{ marginBottom: 12 }}>{error}</div>}
@@ -214,7 +245,7 @@ function TopBar({ perfil, tab, setTab, onOpenProfile, onLogout, esDueño }) {
   if (esDueño) tabs.push({ k: "planes", l: "Planes" }, { k: "equipo", l: "Equipo" });
   return (
     <header className="il-topbar">
-      <div className="il-logo" style={{ marginBottom: 0 }}><div className="il-logo-mark" style={{ width: 34, height: 34, fontSize: 16 }}>IL</div><div className="il-logo-txt" style={{ fontSize: 17 }}>Iron Ledger</div></div>
+      <div className="il-logo" style={{ marginBottom: 0 }}><Emblem size={34} /><div className="il-logo-txt" style={{ fontSize: 19 }}>NanoGYM</div></div>
       <nav className="il-nav">{tabs.map((t) => <button key={t.k} className={tab === t.k ? "active" : ""} onClick={() => setTab(t.k)}>{t.l}</button>)}</nav>
       <div className="il-user-chip">
         <div onClick={onOpenProfile} title="Mi perfil" style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "4px 8px", borderRadius: 10 }}>
