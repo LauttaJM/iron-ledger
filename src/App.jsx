@@ -2,6 +2,18 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { supabase } from "./supabaseClient.js";
 import { CSS } from "./styles.js";
 import { LOGO } from "./logo.js";
+import { ATHLETE } from "./athlete.js";
+
+// ---------- ÍCONOS (línea fina, glow vía CSS) ----------
+const IC = {
+  dashboard: <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>,
+  socios: <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a6 6 0 0 1 11 0"/><circle cx="17.5" cy="9" r="2.6"/><path d="M16 20a5 5 0 0 1 5-2.5"/></svg>,
+  cobros: <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18"/><circle cx="8" cy="15" r="1.4"/></svg>,
+  planes: <svg viewBox="0 0 24 24"><path d="M4 12V5a1 1 0 0 1 1-1h7l8 8-8 8z"/><circle cx="9" cy="9" r="1.4"/></svg>,
+  equipo: <svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>,
+  perfil: <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>,
+  salir: <svg viewBox="0 0 24 24"><path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M9 12h11M16 8l4 4-4 4"/></svg>,
+};
 
 // ============================================================
 //  Helpers de fecha
@@ -159,14 +171,14 @@ export default function App() {
 
   return (
     <Root>
-      <Shell perfil={perfil} tab={tab} setTab={setTab} onOpenProfile={() => setShowPerfil(true)} onLogout={logout} esDueño={esDueño}>
+      <Shell perfil={perfil} tab={tab} setTab={setTab} onOpenProfile={() => setShowPerfil(true)} onLogout={logout} esDueño={esDueño} onNuevoSocio={() => setShowAlta(true)}>
         {cargandoDatos && socios.length === 0 ? <div className="il-center" style={{ minHeight: "40vh" }}><div className="il-spinner" /></div> : (
           <>
-            {tab === "dashboard" && <Dashboard stats={stats} enriched={enriched} onOpen={setSelected} perfil={perfil} />}
-            {tab === "socios" && <Socios filtered={filtered} query={query} setQuery={setQuery} filtro={filtro} setFiltro={setFiltro} onOpen={setSelected} onAlta={() => setShowAlta(true)} />}
-            {tab === "cobros" && <Cobros socios={socios} planById={planById} />}
-            {tab === "planes" && esDueño && <Planes planes={planes} onSave={guardarPlan} />}
-            {tab === "equipo" && esDueño && <Equipo equipo={equipo} perfil={perfil} onRol={actualizarRolEquipo} onCrear={crearUsuario} />}
+            {tab === "dashboard" && <Dashboard stats={stats} enriched={enriched} onOpen={setSelected} perfil={perfil} socios={socios} planById={planById} />}
+            {tab === "socios" && <main className="il-main"><Socios filtered={filtered} query={query} setQuery={setQuery} filtro={filtro} setFiltro={setFiltro} onOpen={setSelected} onAlta={() => setShowAlta(true)} /></main>}
+            {tab === "cobros" && <main className="il-main"><Cobros socios={socios} planById={planById} /></main>}
+            {tab === "planes" && esDueño && <main className="il-main"><Planes planes={planes} onSave={guardarPlan} /></main>}
+            {tab === "equipo" && esDueño && <main className="il-main"><Equipo equipo={equipo} perfil={perfil} onRol={actualizarRolEquipo} onCrear={crearUsuario} /></main>}
           </>
         )}
       </Shell>
@@ -184,7 +196,7 @@ function Root({ children }) {
     <div className="il-root">
       <style>{CSS}</style>
       <div className="il-bg-grad" />
-      <div className="il-bg-crest"><img src={LOGO} alt="" /></div>
+      <div className="il-bg-tex" />
       <div className="il-shell">{children}</div>
     </div>
   );
@@ -221,16 +233,15 @@ function Login({ aviso }) {
 
 // ---------- SHELL (sidebar + drawer móvil) ----------
 const NAV = [
-  { k: "dashboard", l: "Inicio", ico: "▦" },
-  { k: "socios", l: "Socios", ico: "👥" },
-  { k: "cobros", l: "Cobros", ico: "💲" },
-  { k: "planes", l: "Planes", ico: "🏷", soloDueño: true },
-  { k: "equipo", l: "Equipo", ico: "🛡", soloDueño: true },
+  { k: "dashboard", l: "Inicio", grupo: "Resumen" },
+  { k: "socios", l: "Socios", grupo: "Gestión" },
+  { k: "cobros", l: "Cobros", grupo: "Gestión" },
+  { k: "planes", l: "Planes", grupo: "Gestión", soloDueño: true },
+  { k: "equipo", l: "Equipo", grupo: "Administración", soloDueño: true },
 ];
 
-function Shell({ perfil, tab, setTab, onOpenProfile, onLogout, esDueño, children }) {
+function Shell({ perfil, tab, setTab, onOpenProfile, onLogout, esDueño, children, onNuevoSocio }) {
   const [menu, setMenu] = useState(false);
-  const [drawer, setDrawer] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
     function fuera(e) { if (ref.current && !ref.current.contains(e.target)) setMenu(false); }
@@ -238,70 +249,143 @@ function Shell({ perfil, tab, setTab, onOpenProfile, onLogout, esDueño, childre
     return () => document.removeEventListener("mousedown", fuera);
   }, []);
   const items = NAV.filter((t) => !t.soloDueño || esDueño);
-  const ir = (k) => { setTab(k); setDrawer(false); };
-
-  const SidebarInner = (
-    <>
-      <div className="il-sb-logo"><img src={LOGO} alt="" /><div className="txt">NANO<b>GYM</b></div></div>
-      <nav className="il-sb-nav">
-        {items.map((t) => (
-          <button key={t.k} className={tab === t.k ? "active" : ""} onClick={() => ir(t.k)}>
-            <span className="il-sb-ico">{t.ico}</span>{t.l}
-          </button>
-        ))}
-      </nav>
-      <div className="il-sb-foot" ref={ref} style={{ position: "relative" }}>
-        <div className="il-sb-user" onClick={() => setMenu((m) => !m)}>
-          <div className="il-avatar">{perfil.foto ? <img src={perfil.foto} alt="" /> : perfil.nombre[0]}</div>
-          <div style={{ flex: 1, minWidth: 0 }}><div className="nm">{perfil.nombre}</div><div className="il-role-tag">{perfil.rol}</div></div>
-          <span style={{ color: "var(--txt-dim)" }}>⋯</span>
-        </div>
-        {menu && (
-          <div className="il-menu">
-            <button className="il-menu-item" onClick={() => { setMenu(false); setDrawer(false); onOpenProfile(); }}><span className="il-menu-ico">👤</span> Mi perfil</button>
-            <div className="il-menu-sep" />
-            <button className="il-menu-item danger" onClick={onLogout}><span className="il-menu-ico">⏻</span> Cerrar sesión</button>
-          </div>
-        )}
-      </div>
-    </>
-  );
+  const grupos = [];
+  items.forEach((t) => { let g = grupos.find((x) => x.nombre === t.grupo); if (!g) { g = { nombre: t.grupo, items: [] }; grupos.push(g); } g.items.push(t); });
+  const ir = (k) => setTab(k);
 
   return (
     <div className="il-app">
-      <aside className="il-sidebar">{SidebarInner}</aside>
+      <aside className="il-sidebar">
+        <div className="il-sb-logo"><img src={LOGO} alt="" /><div className="txt">NANO<b>GYM</b></div></div>
+        {grupos.map((g) => (
+          <div key={g.nombre}>
+            <div className="il-grp">{g.nombre}</div>
+            <nav className="il-sb-nav">
+              {g.items.map((t) => (
+                <button key={t.k} className={tab === t.k ? "active" : ""} onClick={() => ir(t.k)}>
+                  {IC[t.k]}{t.l}
+                </button>
+              ))}
+            </nav>
+          </div>
+        ))}
+        <div className="il-cta"><button className="il-btn" onClick={onNuevoSocio}>+ Nuevo socio</button></div>
+        <div className="il-sb-spacer" />
+        <div className="il-sb-foot" ref={ref} style={{ position: "relative" }}>
+          <button onClick={() => { onOpenProfile(); }}>{IC.perfil} Mi perfil</button>
+          <button onClick={onLogout}>{IC.salir} Cerrar sesión</button>
+        </div>
+      </aside>
+
       <div className="il-content">
         <div className="il-mobile-bar">
           <div className="il-mobile-logo"><img src={LOGO} alt="" /><div className="txt">NANO<b>GYM</b></div></div>
-          <button className="il-burger" onClick={() => setDrawer(true)}>☰</button>
+          <div className="il-mobile-av" onClick={onOpenProfile}>{perfil.foto ? <img src={perfil.foto} alt="" /> : <div className="il-avatar" style={{ border: "none" }}>{perfil.nombre[0]}</div>}</div>
         </div>
-        <main className="il-main">{children}</main>
+        {children}
       </div>
-      {drawer && (
-        <div className="il-drawer">
-          <div className="il-drawer-bg" onClick={() => setDrawer(false)} />
-          <div className="il-drawer-panel">{SidebarInner}</div>
-        </div>
-      )}
+
+      <nav className="il-tabbar">
+        {items.map((t) => (
+          <button key={t.k} className={tab === t.k ? "active" : ""} onClick={() => ir(t.k)}>
+            {IC[t.k]}{t.l}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
 
 // ---------- DASHBOARD ----------
-function Dashboard({ stats, enriched, onOpen, perfil }) {
+function Dashboard({ stats, enriched, onOpen, perfil, socios, planById }) {
   const atencion = enriched.filter((s) => s.estado.key !== "alDia").sort((a, b) => parseISO(a.vencimiento) - parseISO(b.vencimiento));
+  const pct = stats.total ? Math.round((stats.alDia / stats.total) * 100) : 0;
+
+  // Cobros de los últimos 6 meses + total del mes actual
+  const todosPagos = useMemo(() => {
+    const arr = [];
+    socios.forEach((s) => (s.pagos || []).forEach((p) => arr.push({ ...p, socio: s })));
+    return arr;
+  }, [socios]);
+  const meses = useMemo(() => {
+    const out = []; const base = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+      const key = toISO(d).slice(0, 7);
+      const total = todosPagos.filter((p) => p.fecha && p.fecha.slice(0, 7) === key).reduce((a, p) => a + Number(p.monto || 0), 0);
+      out.push({ key, total, label: d.toLocaleDateString("es-AR", { month: "short" }) });
+    }
+    return out;
+  }, [todosPagos]);
+  const maxMes = Math.max(1, ...meses.map((m) => m.total));
+  const cobradoMes = meses[meses.length - 1]?.total || 0;
+  const cobrosMes = todosPagos.filter((p) => p.fecha && p.fecha.slice(0, 7) === toISO(new Date()).slice(0, 7)).length;
+
+  // Actividad reciente: últimos pagos
+  const actividad = useMemo(() => {
+    return [...todosPagos].filter((p) => p.fecha).sort((a, b) => (b.creado_en || b.fecha).localeCompare(a.creado_en || a.fecha)).slice(0, 4);
+  }, [todosPagos]);
+
   return (
     <>
-      <h1 className="il-page-title">Hola, {perfil.nombre} 👋</h1>
-      <p className="il-page-sub">Resumen al {fmtFecha(HOY)}</p>
-      <div className="il-stats">
-        <div className="il-stat s-total"><span className="bar" /><div className="num">{stats.total}</div><div className="lbl">Socios activos</div></div>
-        <div className="il-stat s-dia"><span className="bar" /><div className="num" style={{ color: "var(--green)" }}>{stats.alDia}</div><div className="lbl">Al día</div></div>
-        <div className="il-stat s-pv"><span className="bar" /><div className="num" style={{ color: "var(--amber)" }}>{stats.porVencer}</div><div className="lbl">Por vencer (≤3 días)</div></div>
-        <div className="il-stat s-venc"><span className="bar" /><div className="num" style={{ color: "var(--red)" }}>{stats.vencido}</div><div className="lbl">Vencidos</div></div>
-      </div>
-      <h3 className="il-section-h">Requieren atención</h3>
-      {atencion.length === 0 ? <div className="il-empty">Todo en orden. Nadie con cuota pendiente. 🎉</div> : <div className="il-card-list">{atencion.map((s) => <SocioRow key={s.id} s={s} onOpen={onOpen} />)}</div>}
+      <div className="il-topnav"><div className="il-crumb">Inicio / <b>Panel</b></div></div>
+      <main className="il-main">
+        <span className="il-chip">Resumen de hoy</span>
+        <h1 className="il-page-title">Tu gimnasio, <em>bajo control</em></h1>
+        <p className="il-page-sub">Cuotas, cobros y vencimientos en un solo lugar. Hoy es {fmtFecha(HOY)}.</p>
+
+        <div className="il-cols">
+          <div className="il-colmain">
+            <div className="il-glass il-hero-panel">
+              <div className="lbl">Estado general</div>
+              <h2>{pct}% de socios al día</h2>
+              <div className="d">{stats.alDia} de {stats.total} socios con la cuota vigente</div>
+              <div className="il-metrics">
+                <div className="il-metric"><div className="n">{stats.total}</div><div className="l">Socios activos</div></div>
+                <div className="il-metric c"><div className="n">{stats.alDia}</div><div className="l">Al día</div></div>
+                <div className="il-metric r"><div className="n">{stats.vencido}</div><div className="l">Vencidos</div></div>
+              </div>
+              <div className="il-athlete"><div className="gl" /><img src={ATHLETE} alt="" /></div>
+            </div>
+
+            <h3 className="il-section-h">Requieren atención</h3>
+            {atencion.length === 0 ? <div className="il-empty">Todo en orden. Nadie con cuota pendiente. 🎉</div> : <div className="il-card-list">{atencion.map((s, i) => <SocioRow key={s.id} s={s} onOpen={onOpen} delay={i} />)}</div>}
+          </div>
+
+          <div className="il-colside">
+            <div className="il-glass il-pcard">
+              <div className="il-pav">{perfil.foto ? <img src={perfil.foto} alt="" /> : <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", fontFamily: "var(--font-disp)", fontWeight: 700, fontSize: 30, color: "#fff" }}>{perfil.nombre[0]}</div>}</div>
+              <h3>{perfil.nombre}</h3>
+              <div className="tier">{perfil.rol === "dueño" ? "Dueño" : "Empleado"} · NanoGYM</div>
+              <div className="il-pstats">
+                <div className="il-ps"><div className="n">{stats.total}</div><div className="l">Socios</div></div>
+                <div className="il-ps r"><div className="n">{fmtPesos(cobradoMes)}</div><div className="l">Mes</div></div>
+              </div>
+            </div>
+
+            <div className="il-glass il-chartcard">
+              <div className="ti">Cobros del mes</div>
+              <div className="big">{fmtPesos(cobradoMes)}</div>
+              <div className="il-chart">
+                {meses.map((m, i) => (
+                  <div key={m.key} className={"b" + (i === meses.length - 1 ? " hi" : "")} style={{ height: Math.max(6, Math.round((m.total / maxMes) * 100)) + "%", animationDelay: (i * 0.07) + "s" }} title={fmtPesos(m.total)} />
+                ))}
+              </div>
+              <div className="il-chl">{meses.map((m) => <span key={m.key}>{m.label}</span>)}</div>
+            </div>
+
+            <div className="il-glass il-feed">
+              <h4>Actividad reciente</h4>
+              {actividad.length === 0 ? <div style={{ color: "var(--txt-dim)", fontSize: 12.5 }}>Todavía no hay movimientos.</div> : actividad.map((p, i) => (
+                <div className="il-fi" key={p.id || i}>
+                  <div className="d">$</div>
+                  <div><div className="tx"><b>{p.socio.nombre} {p.socio.apellido}</b> pagó {p.metodo === "mercadopago" ? "por Mercado Pago" : "en efectivo"}.</div><div className="ag">{fmtFecha(p.fecha)}</div></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </main>
     </>
   );
 }
@@ -317,16 +401,16 @@ function Socios({ filtered, query, setQuery, filtro, setFiltro, onOpen, onAlta }
       </div>
       <div className="il-toolbar">
         <div className="il-search"><input className="il-input" placeholder="Buscar por nombre, apellido o mail…" value={query} onChange={(e) => setQuery(e.target.value)} /></div>
-        <div className="il-filters">{chips.map((c) => <button key={c.k} className={"il-chip" + (filtro === c.k ? " on" : "")} onClick={() => setFiltro(c.k)}>{c.l}</button>)}</div>
+        <div className="il-filters">{chips.map((c) => <button key={c.k} className={"il-fchip" + (filtro === c.k ? " on" : "")} onClick={() => setFiltro(c.k)}>{c.l}</button>)}</div>
       </div>
-      {filtered.length === 0 ? <div className="il-empty">No hay socios que coincidan.</div> : <div className="il-card-list">{filtered.map((s) => <SocioRow key={s.id} s={s} onOpen={onOpen} />)}</div>}
+      {filtered.length === 0 ? <div className="il-empty">No hay socios que coincidan.</div> : <div className="il-card-list">{filtered.map((s, i) => <SocioRow key={s.id} s={s} onOpen={onOpen} delay={i} />)}</div>}
     </>
   );
 }
-function SocioRow({ s, onOpen }) {
+function SocioRow({ s, onOpen, delay = 0 }) {
   const e = s.estado;
   return (
-    <div className="il-row" onClick={() => onOpen(s.id)}>
+    <div className="il-row" onClick={() => onOpen(s.id)} style={{ animationDelay: Math.min(delay * 0.05, 0.4) + "s" }}>
       <span className={"il-dot " + e.key} />
       <div className="il-row-main"><div className="il-row-name">{s.nombre} {s.apellido}</div><div className="il-row-meta">{s.plan.nombre} · {s.mail}</div></div>
       <div className="il-row-right"><span className={"il-badge " + e.key}>{e.label}</span><div className="il-row-venc">{e.key === "vencido" ? `Venció el ${fmtFecha(s.vencimiento)}` : `Vence ${fmtFecha(s.vencimiento)}`}</div></div>
